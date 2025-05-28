@@ -4,8 +4,8 @@ from enum import Enum
 from pydantic import validator
 
 class FileUploadServer(str, Enum):
-    LOCAL: str = "local"
-    S3: str = "s3"
+    LOCAL = "local"
+    S3 = "s3"
 
 
 class Settings(BaseSettings):
@@ -13,18 +13,22 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Document Information Extractor"
     
     # API Keys
-    OPENAI_KEY: str
-    GROK_KEY: str
+    OPENAI_KEY: str = ""
+    GROK_KEY: str = ""
+
+    JWT_SECRET_KEY: str = ""
+    JWT_ALGORITHM: str = ""
+    SERVICE_ID: str = ""
 
     class Config:
         env_prefix = 'API_'
 
 
 class FileUploadSettings(BaseSettings):
-    server: FileUploadServer
-    bucket: str
-    access_key: str | None
-    key_id: str | None
+    server: FileUploadServer = FileUploadServer.LOCAL
+    bucket: str = ""
+    access_key: str = ""
+    key_id: str = ""
     
     @validator('access_key', 'key_id')
     def validate_s3_credentials(cls, value, values):
@@ -35,11 +39,14 @@ class FileUploadSettings(BaseSettings):
     class Config:
         env_prefix = 'FILE_UPLOAD_'
 
-FILE_UPLOAD_SETTINGS = FileUploadSettings()
-SETTINGS = Settings()
 
 @lru_cache()
 def get_settings():
     return Settings()
 
-settings = get_settings()
+@lru_cache()
+def get_file_upload_settings():
+    return FileUploadSettings()
+
+SETTINGS = get_settings()
+FILE_UPLOAD_SETTINGS = get_file_upload_settings()

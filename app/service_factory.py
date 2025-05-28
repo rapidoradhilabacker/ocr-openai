@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import Union
-from app.services.openai_service import OpenAIService
-from app.services.grok_service import GrokService
-from app.schemas.document import AIProvider
+from app.openai_service import OpenAIService
+from app.grok_service import GrokService
+from app.schemas import AIProvider
 
 class ServiceFactory:
     @staticmethod

@@ -1,17 +1,18 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
-from app.schemas.document import DocumentResponse, DocumentInfo
-from app.services.service_factory import ServiceFactory
-from app.schemas.document import AIProvider
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
+from app.schemas import DocumentResponse, DocumentInfo, AIProvider
+from app.service_factory import ServiceFactory
 import time
 import httpx
 from typing import Optional, Union
-from app.services.openai_service import OpenAIService
-from app.services.grok_service import GrokService
-from app.services.s3_file_service import S3FileService
-from app.core.config import FILE_UPLOAD_SETTINGS
+from app.openai_service import OpenAIService
+from app.grok_service import GrokService
+from app.s3_file_service import S3FileService
+from app.config import FILE_UPLOAD_SETTINGS
 from io import BytesIO
 import asyncio
 from app.tracing import tracer
+from app.schemas import Trace
+from app.utils import get_current_user
 
 router = APIRouter()
 
@@ -19,7 +20,8 @@ router = APIRouter()
 async def extract_document_info(
     file: Optional[UploadFile] = None,
     file_url: Optional[str] = Form(None),
-    provider: AIProvider = Form(AIProvider.OPENAI)
+    provider: AIProvider = Form(AIProvider.OPENAI),
+    trace: Trace = Depends(get_current_user)
 ):
     start_time = time.time()
 

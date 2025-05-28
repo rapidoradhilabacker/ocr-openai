@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import document
-from app.core.config import settings
+from app.document import router
+from app.config import SETTINGS
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title=SETTINGS.PROJECT_NAME,
+    openapi_url=f"{SETTINGS.API_V1_STR}/openapi.json"
 )
 
 # Configure CORS
@@ -18,4 +18,4 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(document.router, prefix=f"{settings.API_V1_STR}/documents", tags=["documents"])
+app.include_router(router, prefix=f"{SETTINGS.API_V1_STR}/documents", tags=["documents"])

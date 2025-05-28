@@ -1,7 +1,7 @@
 
 
 from enum import Enum
-import aioboto3
+import aioboto3 # type: ignore
 from fastapi import UploadFile
 
 class S3BucketContectType(str, Enum):

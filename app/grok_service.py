@@ -1,14 +1,18 @@
 import json
 import base64
 from typing import Dict
-from openai import OpenAI
-from app.core.config import SETTINGS
-from app.services.base_service import AIServiceBase
+import httpx
+from app.config import SETTINGS
+from app.base_service import AIServiceBase
 from app.tracing import tracer
-
-class OpenAIService(AIServiceBase):
+class GrokService(AIServiceBase):
     def __init__(self):
-        self.client = OpenAI(api_key=SETTINGS.OPENAI_KEY)
+        self.api_key = SETTINGS.GROK_KEY
+        self.base_url = "https://api.x.ai/v1"
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
 
     async def extract_document_info(self, image_bytes: bytes) -> dict:
         with tracer.start_as_current_span('extract_document_info_grok') as span:
@@ -63,57 +67,47 @@ class OpenAIService(AIServiceBase):
             - Do not include any additional text or formatting
             - Ensure the response is valid JSON
             """
-
+            # Convert image to base64
             image_format = self.detect_image_format(image_bytes)
 
             # Convert image bytes to base64
             mime_type = f'image/{image_format}'
             b64_image = base64.b64encode(image_bytes).decode("utf-8")
 
-
-            # Create the API request
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
+            # Prepare the request payload
+            payload = {
+                "model": "grok-1",
+                "messages": [
                     {
                         "role": "user",
                         "content": [
                             {"type": "text", "text": instruction},
                             {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime_type};base64,{b64_image}",
-                                    "detail": "high"
+                                "type": "image",
+                                "image": {
+                                    "data": b64_image,
+                                    "type": image_format
                                 }
                             }
                         ]
                     }
                 ],
-                max_tokens=1000
-            )
-            
-            # Extract the response content
-            content = response.choices[0].message.content.strip()
-            
-            # Try to find JSON in the response
-            try:
-                # First try direct JSON parsing
-                extracted_data = json.loads(content)
-            except json.JSONDecodeError:
-                # If direct parsing fails, try to find JSON-like structure
-                start_idx = content.find('{')
-                end_idx = content.rfind('}') + 1
-                if start_idx >= 0 and end_idx > start_idx:
-                    json_str = content[start_idx:end_idx]
-                    extracted_data = json.loads(json_str)
-                else:
-                    # If no JSON structure found, return empty template
-                    extracted_data = json_template
-            
-            # Validate the extracted data has all required fields
-            for key in json_template.keys():
-                if key not in extracted_data:
-                    extracted_data[key] = ""
-            
-            extracted_data['file_type'] = image_format
-            return extracted_data
+                "max_tokens": 1000
+            }
+
+            # Make the API request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=30.0
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Grok API error: {response.text}")
+
+                result = response.json()
+                extracted_data = json.loads(result["choices"][0]["message"]["content"])
+                extracted_data['file_type'] = image_format
+                return extracted_data
