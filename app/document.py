@@ -12,7 +12,7 @@ from io import BytesIO
 import asyncio
 from app.tracing import tracer
 from app.schemas import Trace
-from app.utils import get_current_user
+from app.auth import get_current_user
 
 router = APIRouter()
 

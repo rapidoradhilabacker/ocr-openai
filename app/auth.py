@@ -34,13 +34,14 @@ async def get_current_user(
     }
 
     with tracer.start_as_current_span("get_request_param", attributes=attributes) as span:
+        error_response = GenericResponse.get_error_response(
+            error_code=ErrorCode.ERROR_CODE_AUTH_ERROR,
+            customer_message='Invalid Token',
+            debug_info={}
+        )
         credentials_exception = HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
-            detail=GenericResponse.get_error_response(
-                    error_code=ErrorCode.ERROR_CODE_AUTH_ERROR,
-                    customer_message='Invalid Token',
-                    debug_info={}
-                ),
+            detail=error_response.dict(),  # Convert to dictionary for JSON serialization
         )
         if not authorization:
             raise credentials_exception
