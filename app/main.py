@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.document import router
 from app.config import SETTINGS
+from app.auth_api import auth_router
 
 app = FastAPI(
     title=SETTINGS.PROJECT_NAME,
@@ -19,3 +20,5 @@ app.add_middleware(
 
 # Include routers
 app.include_router(router, prefix=f"{SETTINGS.API_V1_STR}/documents", tags=["documents"])
+
+app.include_router(auth_router, prefix=f"{SETTINGS.API_V1_STR}/auth", tags=["auth"])
