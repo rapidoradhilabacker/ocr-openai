@@ -6,21 +6,25 @@ import httpx
 from typing import Optional, Union
 from app.openai_service import OpenAIService
 from app.grok_service import GrokService
-from app.s3_file_service import S3FileService
 from app.config import FILE_UPLOAD_SETTINGS
 from io import BytesIO
 import asyncio
 from app.tracing import tracer
 from app.schemas import Trace
 from app.auth import get_current_user
+from app.s3_file_service import S3Service
+from app.schemas import User, ProductBytes, ImageBytes, InboundDocumentType
 
 router = APIRouter()
+DEFAULT_DOC_TYPE = "documents"
 
 @router.post("/extract", response_model=DocumentResponse)
 async def extract_document_info(
     file: Optional[UploadFile] = None,
     file_url: Optional[str] = Form(None),
     provider: AIProvider = Form(AIProvider.OPENAI),
+    mobile: str = Form(None),
+    tenant: str = Form(None),
     trace: Trace = Depends(get_current_user)
 ):
     start_time = time.time()
@@ -66,11 +70,7 @@ async def extract_document_info(
         span.add_event("Service selected", {"provider": provider})
 
         # Initialize the S3 file service for saving the image
-        s3_file_service = S3FileService(
-            bucket_name=FILE_UPLOAD_SETTINGS.bucket,
-            aws_access_key_id=FILE_UPLOAD_SETTINGS.key_id,
-            aws_secret_access_key=FILE_UPLOAD_SETTINGS.access_key
-        )
+        s3_service = S3Service()
         file_name = f"doc_{int(time.time())}.png"
         span.set_attribute("s3.file_name", file_name)
 
@@ -80,12 +80,29 @@ async def extract_document_info(
             file = UploadFile(filename=file_name, file=file_obj)
             span.add_event("Wrapped file bytes into BytesIO object")
 
-        save_task = s3_file_service.save_file(file, file_name)
+        docs: list[ProductBytes] = [
+            ProductBytes(
+                product_code=DEFAULT_DOC_TYPE,
+                images=[
+                    ImageBytes(
+                        image_name=file_name,
+                        image_type=InboundDocumentType.PNG,
+                        image_bytes=image_bytes.decode("utf-8")
+                    )
+                ]
+            )
+        ]
+        user = User(
+            mobile_no=mobile,
+            company_name=""
+        )
+        save_task = s3_service.upload_to_s3_file_bytes(user, docs, tenant)
         extract_task = service.extract_document_info(image_bytes)
         span.add_event("Scheduled S3 upload and document extraction tasks")
 
         try:
-            url, result = await asyncio.gather(save_task, extract_task)
+            s3_response, result = await asyncio.gather(save_task, extract_task)
+            url = s3_response.get('s3_urls', {}).get(DEFAULT_DOC_TYPE, [None])[0]
             span.add_event("Completed asynchronous tasks", {"s3_url": url})
         except Exception as e:
             span.record_exception(e)

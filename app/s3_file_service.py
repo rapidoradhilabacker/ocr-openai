@@ -1,45 +1,64 @@
+from fastapi import HTTPException
+import httpx
+from httpx import Timeout
+from app.schemas import (
+    S3UploadFileBytesRequest,
+    ProductBytes,
+    User
+)
+from app.tracing import tracer
+from app.config import SETTINGS
 
+class S3Service:
+    """Service for handling S3-related operations"""
+    
+    def __init__(self):
+        self.s3_upload_url_file_bytes = f"{SETTINGS.S3_BASE_URL}/s3/upload/oaas/files/v2"
+        self.s3_auth_token = SETTINGS.S3_AUTH_TOKEN
+        self.client = httpx.AsyncClient(timeout=30.0)
 
-from enum import Enum
-import aioboto3 # type: ignore
-from fastapi import UploadFile
+    def get_s3_headers(self):
+        return {
+            "Authorization": f"Bearer {self.s3_auth_token}",
+            "x-request-id": "3e434",
+            "x-app-id": "3434",
+            "x-device-id": "dsd",
+            "x-business-id": "bef46c45-14ec-4856-a3ef-4fa6f00f57ca"
+        }
 
-class S3BucketContectType(str, Enum):
-    JSON =  "application/json"
-    PNG = "image/png"
-    BINARY ="binary/octet-stream"
+    async def upload_to_s3_file_bytes(self, user: User, docs: list[ProductBytes], tenant: str) -> dict:
+        with tracer.start_as_current_span("upload_to_s3") as span:
+            s3_request = S3UploadFileBytesRequest(
+                user=user,
+                products=docs,
+                tenant=tenant
+            )
 
-class S3FileService():
+            try:
+                response = await self.client.post(
+                    self.s3_upload_url_file_bytes,
+                    json=s3_request.model_dump(),
+                    headers=self.get_s3_headers(),
+                    timeout=Timeout(60.0)
+                )
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to upload to S3: {str(e)}"
+                )
+            
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to upload to S3: {str(e)}"
+                )
+            finally:
+                await self.client.aclose()
 
-    def __init__(self, bucket_name: str, aws_access_key_id: str, aws_secret_access_key: str):
-        self.bucket_name = bucket_name
-        self.session = aioboto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+    async def __aenter__(self):
+        return self
 
-    async def save_file(self, file_obj: UploadFile, file_name: str) -> str:
-        async with self.session.client('s3') as s3_client:
-            bucket_location = await s3_client.get_bucket_location(Bucket=self.bucket_name)
-            await s3_client.upload_fileobj(file_obj.file, self.bucket_name, file_name, ExtraArgs={'ACL': 'public-read'})
-            s3_url = f"https://{self.bucket_name}.s3-{bucket_location['LocationConstraint']}.amazonaws.com/{file_name}"
-            return s3_url
-
-    async def save_file_with_content_type(self, file: UploadFile, file_name: str, content_type: S3BucketContectType) -> str:
-        async with self.session.client('s3') as s3_client:
-            bucket_location = await s3_client.get_bucket_location(Bucket=self.bucket_name)
-            await s3_client.upload_fileobj(file.file, self.bucket_name, file_name, ExtraArgs={'ACL': 'public-read', 'ContentType':content_type.value})
-            s3_url = f"https://{self.bucket_name}.s3-{bucket_location['LocationConstraint']}.amazonaws.com/{file_name}"
-            return s3_url
-
-
-    async def save_file_with_validity(self, source: str, file_name: str) -> str:
-        async with self.session.client('s3') as s3_client:
-            bucket_location = await s3_client.get_bucket_location(Bucket=self.bucket_name)
-            await s3_client.upload_file(source, self.bucket_name, file_name)
-            s3_url = await s3_client.generate_presigned_url(
-                ClientMethod='get_object',
-                Params={
-                    'Bucket': self.bucket_name,
-                    'Key': file_name
-                },
-            ExpiresIn=600
-        )
-        return s3_url
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()

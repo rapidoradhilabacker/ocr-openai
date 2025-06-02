@@ -18,6 +18,14 @@ class AIProvider(str, Enum):
     OPENAI = "openai"
     GROK = "grok"
 
+class InboundDocumentType(str, Enum):
+    PDF = "application/pdf"
+    IMAGE = "image/jpeg"
+    ZIP = "application/zip"
+    JSON = "application/json"
+    PNG = "image/png"
+    BINARY = "binary/octet-stream"
+
 class DocumentInfo(BaseModel):
     doc_id: str
     doc_type: str
@@ -110,3 +118,21 @@ class TokenResponse(BaseModel):
                 "expires_at": "2025-08-29T06:54:39Z"
             }
         }
+
+class User(BaseModel):
+    mobile_no: str  
+    company_name: Optional[str] = ""
+
+class ImageBytes(BaseModel):
+    image_name: str
+    image_type: InboundDocumentType
+    image_bytes: str
+
+class ProductBytes(BaseModel):
+    product_code: str
+    images: list[ImageBytes]
+    
+class S3UploadFileBytesRequest(BaseModel):
+    user: User
+    products: list[ProductBytes]
+    tenant: str = 'placeorder'

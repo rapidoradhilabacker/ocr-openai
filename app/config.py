@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = ""
     SERVICE_ID: str = ""
 
+    S3_BASE_URL: str = ""
+    S3_AUTH_TOKEN: str = ""
+
     class Config:
         env_prefix = 'API_'
 
