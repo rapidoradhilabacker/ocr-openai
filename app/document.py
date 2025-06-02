@@ -14,6 +14,7 @@ from app.schemas import Trace
 from app.auth import get_current_user
 from app.s3_file_service import S3Service
 from app.schemas import User, ProductBytes, ImageBytes, InboundDocumentType
+import base64
 
 router = APIRouter()
 DEFAULT_DOC_TYPE = "documents"
@@ -87,7 +88,7 @@ async def extract_document_info(
                     ImageBytes(
                         image_name=file_name,
                         image_type=InboundDocumentType.PNG,
-                        image_bytes=image_bytes.decode("utf-8")
+                        image_bytes=base64.b64encode(image_bytes).decode("utf-8")
                     )
                 ]
             )
